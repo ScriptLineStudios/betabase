@@ -1,0 +1,166 @@
+<!-- <!DOCTYPE html>
+<html>
+    <head>
+        <title>BetaBase</title>
+    </head>
+    <body>
+        <canvas id="canvas" width="512" height="512"></canvas> 
+    </body>
+</html>
+<script src="/static/a.out.js"></script>
+<script>
+    var c = document.getElementById("canvas", {"alpha": false});
+    var ctx = c.getContext("2d");
+    var result = Module.onRuntimeInitialized = () => {
+        for (let x = 0; x < 512; x+=16) {
+            for (let z = 0; z < 512; z+=16) {
+                let pixels = Module.ccall('fill_area', 'number', ['number', 'number'], [x, z]);
+                let buffer = new Uint8ClampedArray(Module.HEAPU8.buffer, pixels, 16 * 16 * 4 * 4 * 4);
+                var img = new ImageData(buffer, 16 * 4);   
+                ctx.putImageData(img, x * 4, z * 4);
+            }
+        }
+    }
+</script> -->
+<!DOCTYPE HTML>
+<html>
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/icon.ico">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ConstGusser</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""/>
+    <!-- Make sure you put this AFTER Leaflet's CSS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+    
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
+    <script src="https://code.jquery.com/jquery-3.3.1.js"></script>
+    <script src="/static/rastercoords.js"></script>
+    <style>
+        html, body { height: 100%; width: 100%; margin: 0; }
+        body {
+        margin: 0;
+        padding: 0;
+        }
+        #map { 
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            transition: 0.3s;
+            border-radius: 5px;
+        }
+        #result_map { 
+            width: 750px;
+            height: 750px;
+            margin: auto;
+            width: 75%;
+            height: 75%;
+            padding: 10px;
+            top: 5%;
+        }
+        .button {
+            background-color: #008CBA; /* Green */
+            width: 300px;
+        }
+        #overlay {
+            position: fixed;
+            display: none;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 2;
+            cursor: pointer;
+        }    
+        img.leaflet-tile {
+            image-rendering: pixelated;
+        }
+    </style>
+</head>
+<body>
+
+<div id="map_container">
+    <div id="map"></div>
+</div>
+
+<script src="/static/a.out.js"></script>
+<script>
+    var result = Module.onRuntimeInitialized = () => {
+        const map = L.map('map', {
+            maxZoom: 0,
+            minZoom: 0,
+            crs: L.CRS.Simple,
+            fullscreenControl: true,
+            doubleClickZoom: 'center',
+            scrollWheelZoom: 'center',
+            touchZoom: 'center',
+        }).setView([100, 0], 0);
+
+        let zoom = 0;
+
+        // // Create custom canvas tile layer
+        const CanvasTileLayer = L.GridLayer.extend({
+        createTile: function(coords) {
+            const canvas = document.createElement('canvas');
+            const size = this.getTileSize();
+            canvas.width = size.x;
+            canvas.height = size.y;
+            let pixels = Module.ccall('fill_area', 'number', ['number', 'number'], [coords.x * 64, coords.y * 64, zoom]);
+            let buffer = new Uint8ClampedArray(Module.HEAPU8.buffer, pixels, 64 * 64 * 4 * 4 * 4);
+            var img = new ImageData(buffer, 64 * 4);
+            
+            var ctx = canvas.getContext('2d');
+            ctx.putImageData(img, 0, 0);
+
+            ctx.fillStyle = 'red';  // a color name or by using rgb/rgba/hex values
+            ctx.strokeText(`${coords.x} ${coords.y} ${coords.z} ${size}`, 10, 10); // text and position
+
+            return canvas;
+        }
+        });
+
+        // const layer = new InvertedZoomLayer();
+        // layer.addTo(map);
+
+        // const mapBounds = [[0, 0], [256 * 16, 256 * 16]];
+        // map.setMaxBounds(mapBounds);
+
+        // Hook into zoom events to update scale
+        const canvasLayer = new CanvasTileLayer();
+        canvasLayer.addTo(map);
+
+
+        function reloadTiles() {
+                // Add a query string or a timestamp to force a reload
+                const newUrl = 'http://127.0.0.1:5000/' + new Date().getTime();
+                
+                // Change the URL of the tile layer to force a reload
+                canvasLayer.setUrl(newUrl);
+        }
+
+        document.addEventListener('keypress', function(event) {
+            zoom += 4;
+            canvasLayer.redraw(); 
+            console.log('Key pressed: ' + event.key);
+        });
+
+        map.on('zoom', function() {
+            console.log('Zoom level changed:', map.getZoom());
+        });
+
+        function get_zoom() {
+            return 1;
+        }
+    }
+  </script>
+</body>
+</html>
